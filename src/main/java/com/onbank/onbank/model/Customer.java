@@ -23,7 +23,6 @@ public class Customer {
     private Date date_birth;
     private String email;
     private int password;
-    @JsonManagedReference
     @JoinTable(
             name = "customer_account",
             joinColumns = @JoinColumn(name = "id_customer"),
@@ -31,7 +30,6 @@ public class Customer {
     @ManyToMany(cascade = CascadeType.ALL)
     private List<Account> accounts;
 
-    @JsonBackReference
     @ManyToMany(mappedBy = "idCustomer")
      private List<Payment> payments;
 

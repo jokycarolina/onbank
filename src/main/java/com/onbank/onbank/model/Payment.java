@@ -23,7 +23,6 @@ public class Payment {
 
     private Double amount;
 
-    @JsonManagedReference
     @JoinTable(
             name = "payment_customer",
             joinColumns = @JoinColumn(name = "id_payment"),

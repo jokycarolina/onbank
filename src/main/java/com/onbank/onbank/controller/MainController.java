@@ -7,6 +7,7 @@ import com.onbank.onbank.repository.*;
 import com.onbank.onbank.service.ICurrencyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -114,7 +115,7 @@ public class MainController {
 
     ////////////// POST /////
 
-    @PostMapping(path="/")
+    @PostMapping(path="/",consumes = "application/json", produces = "application/json")
     ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
         Account newAccount = new Account();// creamos nueva cuenta
         Optional<Currency> currency1 = currencyRepository.findById(1); // asignamos por default la moneda en pesos
