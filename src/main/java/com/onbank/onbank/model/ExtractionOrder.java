@@ -1,7 +1,7 @@
 package com.onbank.onbank.model;
 
 import javax.persistence.*;
-import java.sql.Date;
+;import java.util.Date;
 
 @Entity
 @Table(name="extraction_order")
