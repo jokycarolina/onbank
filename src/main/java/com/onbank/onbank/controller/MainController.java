@@ -39,6 +39,9 @@ public class MainController {
     @Autowired
     private IDepositRepository depositRepository;
 
+    @Autowired
+    private IPaymentRepository paymentRepository;
+
     // ***************************************GET*******************************************************************
     //Traer todos los clientes
     @GetMapping(path = "/customers")
@@ -122,6 +125,16 @@ public class MainController {
         return new ResponseEntity("ID NO VALIDO", HttpStatus.BAD_REQUEST);
     }
 
+    //Traer por id  payment
+    @GetMapping(path = "/payment/{id}")
+    ResponseEntity<Payment> getPaymentById(@PathVariable("id") int id) {
+        Optional<Payment> payment = paymentRepository.findById(id);
+        if (payment.isPresent()) {
+            return new ResponseEntity(payment, HttpStatus.FOUND);
+        }
+        return new ResponseEntity("ID NO VALIDO", HttpStatus.BAD_REQUEST);
+    }
+
     ///Traer orden de extraccion por cuenta
     @GetMapping(path = "/extractionorder/account/{idAccount}")
     ResponseEntity<ExtractionOrder> getExtractionOrderByAccount(@PathVariable("idAccount") int idAccount) {
@@ -153,7 +166,7 @@ public class MainController {
     }
 
     //////////////*********************** POST****************************** /////
-    //Creamosu un cliente nuevo con una cuenta de ahorro en pesos con saldo 0.00 por default
+    //Creamos un cliente nuevo con una cuenta de ahorro en pesos con saldo 0.00 por default y devolvemos el cliente creado
     @PostMapping(path = "/", consumes = "application/json", produces = "application/json")
     ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
         try {
@@ -176,7 +189,7 @@ public class MainController {
 
     /// Creamos un nuevo telefono
     @PostMapping(path = "/newphonenumber", consumes = "application/json", produces = "application/json")
-//Guardamos nuevo telefono
+    //Guardamos nuevo telefono
     ResponseEntity<PhoneNumber> newPhoneNumber(@RequestBody PhoneNumber phoneNumber) {
         phoneNumberRepository.save(phoneNumber);
         return new ResponseEntity<>(phoneNumber, HttpStatus.CREATED);
@@ -251,8 +264,78 @@ public class MainController {
 
     }
 
+    //Creamos un pago devolvemos la cuenta con el nuevo monto
+    @PostMapping(path = "/payment", consumes = "application/json", produces = "application/json")
+    ResponseEntity createPayment(@RequestBody Payment payment) {
+       try {
+           //El pago puede tener varios clientes buscamos,iteramos la lista de clientes,por cada cliente del pago:
+            for (Customer customer : payment.getCustomerList()) {
+                //validamos que el cliente exista en el repositorio
+                Integer idCustomer = customer.getCustomerId();
+                Customer cFound =customerRepository.findById(idCustomer).get();
+                if (cFound != null) {
+                    //cada cliente puede tener varias cuentas,las iteramos
+                    for (Account acc : cFound.getAccounts()) {
+                        //Validamos que la moneda del pago sea igual a la moneda de la cuenta
+                        //y que el monto de la cuenta tiene que ser mayor o igual al pago
+                        if (acc.getCurrency().getIdCurrency() == payment.getCurrency().getIdCurrency()
+                                && acc.getAmount().doubleValue() >= payment.getAmount().doubleValue()) {
+                            acc.setAmount(acc.getAmount().doubleValue() - payment.getAmount().doubleValue()); //seteamos el monto de la cuenta
+                            paymentRepository.save(payment);// guardamos
+                            return new ResponseEntity("Se debito correctamente el monto de:"
+                                    +payment.getAmount(),HttpStatus.CREATED);
+                        } else {
+                            return new ResponseEntity("Ups algo salio mal",HttpStatus.BAD_REQUEST);
+                        }
+                    }
+                } else {
+                    return new ResponseEntity("EL CLIENTE NO CONTIENE UNA CUENTA", HttpStatus.BAD_REQUEST);
+                }
+            }
+       } catch (Exception e) {
+            return new ResponseEntity("ERROR DEL TIPO" + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity("Intente de nuevo", HttpStatus.BAD_REQUEST);
+    }
+        ////////////////////////DELETE ////////////////
+        // eliminamos un pago devolvemos el id del pago eliminado
+    @DeleteMapping(path="payment/{id}")
+    @ResponseBody
+    ResponseEntity<GeneralResponse> deleteById(@PathVariable("id") int id){
+        GeneralResponse generalResponse = new GeneralResponse();
+        try{
+            paymentRepository.deleteById(id);
+            generalResponse.setCode(HttpStatus.OK.value());
+            generalResponse.setMessage(HttpStatus.OK.getReasonPhrase() + "Pago eliminado con el id: " +id);
+            return ResponseEntity.accepted().body(generalResponse);
+        }catch(Exception e){
+            generalResponse.setCode(HttpStatus.CONFLICT.value());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " "+e.getMessage());
+            return ResponseEntity.badRequest().body(generalResponse);
+        }
+        
+    }
+    //Eliminamos un cliente devolvemos un generalResponse con el id
+    @DeleteMapping(path="customer/{id}")
+    @ResponseBody
+    ResponseEntity<GeneralResponse> deleteCustomerById(@PathVariable("id") int id){
+        GeneralResponse generalResponse = new GeneralResponse();
+        try{
+            customerRepository.deleteById(id);
+            generalResponse.setCode(HttpStatus.OK.value());
+            generalResponse.setMessage(HttpStatus.OK.getReasonPhrase() + "cliente eliminado con el id: " +id);
+            return ResponseEntity.accepted().body(generalResponse);
+        }catch(Exception e){
+            generalResponse.setCode(HttpStatus.CONFLICT.value());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " "+e.getMessage());
+            return ResponseEntity.badRequest().body(generalResponse);
+        }
+
+    }
+
 
 }
+
 
 
 

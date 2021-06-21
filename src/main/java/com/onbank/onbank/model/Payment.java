@@ -23,12 +23,14 @@ public class Payment {
 
     private Double amount;
 
+
     @JoinTable(
             name = "payment_customer",
             joinColumns = @JoinColumn(name = "id_payment"),
             inverseJoinColumns = @JoinColumn(name = "id_customer"))
-    @ManyToMany(cascade = CascadeType.ALL)
-    private List<Customer> idCustomer;
+
+    @ManyToMany(cascade = CascadeType.DETACH)
+    private List<Customer> customerList;
 
     public int getIdPayment() {
         return idPayment;
@@ -62,12 +64,12 @@ public class Payment {
         this.amount = amount;
     }
 
-    public List<Customer> getIdCustomer() {
-        return idCustomer;
+    public List<Customer> getCustomerList() {
+        return customerList;
     }
 
-    public void setIdCustomer(List<Customer> idCustomer) {
-        this.idCustomer = idCustomer;
+    public void setCustomerList(List<Customer> customerList) {
+        this.customerList = customerList;
     }
 
     @Override
