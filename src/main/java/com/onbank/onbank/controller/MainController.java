@@ -193,7 +193,7 @@ public class MainController {
             Customer newCustomer = customerRepository.save(customer);//Guardamos el cliente
             return new ResponseEntity<>(newCustomer, HttpStatus.CREATED);
         } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            return new ResponseEntity(e.getMessage(),HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -217,16 +217,14 @@ public class MainController {
     }
 
     // Creamos una nueva orden de extraccion
-    @PostMapping(path = "/customer/{id}/amount/{amount}/account/{id_account}/currency/{idCurrency}/extractionorder")
-    ResponseEntity<Account> newOrderExtraction(@PathVariable("id") int id, @PathVariable("amount") double amount,
+    @PostMapping(path = "/amount/{amount}/account/{id_account}/currency/{idCurrency}/extractionorder")
+    ResponseEntity<Account> newOrderExtraction(@PathVariable("amount") double amount,
                                                @PathVariable("id_account") int idAccount,
                                                @PathVariable("idCurrency") int idCurrency) {
         try {
-            Customer customer = customerRepository.findById(id).get();
-            List<Account> accountList = customer.getAccounts(); //buscamos todas las cuentas del cliente
-            for (Account account : accountList) {
-                if (account.getIdAccount() == idAccount) { //el numero de cuenta ingresado corresponde a una cuenta del cliente?
-                    if (account.getCurrency().getIdCurrency() == idCurrency) { //el tipo de moneda es igual al de la cuenta?
+            Account account = accountRepository.findById(idAccount).get(); //buscar la cuenta por el id dado
+            if(account!=null){ //existe la cuenta?
+                  if (account.getCurrency().getIdCurrency() == idCurrency) { //el tipo de moneda es igual al de la cuenta?
                         if (account.getAmount() >= amount) { // el monto es igual o menor al monto de la cuenta?
                             ExtractionOrder newOrder = new ExtractionOrder();// creamos una nueva orden de extraccion
                             newOrder.setAmountExtraction(amount); // seteamos el monto por el ingresado
@@ -234,23 +232,19 @@ public class MainController {
                             newOrder.setDateExtraction(new Date());//seteamos el date al momento de crear la orden de extraccion
                             account.setAmount(account.getAmount() - newOrder.getAmountExtraction());// seteamos el monto de la cuenta
                             extractionOrderRepository.save(newOrder);// guardamos la orden de la extraccion
-                            return new ResponseEntity<Account>(account, HttpStatus.FOUND);
-                        }
+                            return new ResponseEntity(account, HttpStatus.FOUND);
+                        } else{
                         return new ResponseEntity("revisar el monto a extraer es mayor al monto disponible",
-                                HttpStatus.BAD_REQUEST);
-                    }
-                } else {
-                    return new ResponseEntity("La moneda colocada no corresponde al tipo de moneda de la cuenta",
-                            HttpStatus.BAD_REQUEST);
-                }
-                return new ResponseEntity("El numero de cuenta no corresponde al cliente",
-                        HttpStatus.BAD_REQUEST);
+                           HttpStatus.BAD_REQUEST);
+                    }} else{
+                      return new ResponseEntity("EL ID DE LA CUENTA NO EXISTE",
+                              HttpStatus.BAD_REQUEST);
+                  }} else {
+                    return new ResponseEntity("LA MONEDA NO EXISTE",
+                            HttpStatus.BAD_REQUEST);}
+            } catch (Exception e) {
+            return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
             }
-
-        } catch (Exception e) {
-            return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.NOT_FOUND);
-        }
-        return new ResponseEntity("Intente de nuevo", HttpStatus.BAD_REQUEST);
     }
 
     //Creamos un deposito que se sumará a la cuenta proporcionada,devuelve la cuenta con la el deposito hecho
@@ -258,30 +252,28 @@ public class MainController {
     ResponseEntity<Account> createDeposit(@RequestBody Deposit deposit) {
         //Buscamos por ID la cuenta del deposito
         Account account = accountRepository.findById(deposit.getAccount().getIdAccount()).get();
-        try {
-            int idCurrencyByAccount = account.getCurrency().getIdCurrency();//Buscamos el id de la moneda
-            try {
-                //comparamos si el id de la moneda de la cuenta es igual al id de la moneda del deposito
-                if (deposit.getCurrency().getIdCurrency() == idCurrencyByAccount) {
-                    account.setAmount(account.getAmount() + deposit.getAmount());//seteamos el monto de ese cuenta sumandola
-                    try { //Iteramos la lista de clientes que puede tener esa cuenta
-                        for (Customer cust : account.getCustomer()) {
-                            //consultamos si el dni de la cuenta es igual al dni colocado en el deposito
-                            if (cust.getCostumerDni().equalsIgnoreCase(deposit.getDniClient())) {
+        int idCurrencyByAccount = account.getCurrency().getIdCurrency();//Buscamos el id de la moneda
+            if(account!= null) {
+                try {
+                    for (Customer customer : account.getCustomer()) { //una cuenta puede tener varios clientes
+                        if (customer.getCostumerDni() == deposit.getDniClient()) { //validamos si el dni proporcionado = dni de la cuenta
+                            if (account.getIdAccount() == deposit.getAccount().getIdAccount() //validamos si el idcuenta= del deposito
+                                    && account.getCurrency().getIdCurrency() == deposit.getCurrency().getIdCurrency()) {//validamos si la moneda=
+                                account.setAmount(account.getAmount() + deposit.getAmount());//seteamos el monto de la cuenta sumando
                                 depositRepository.save(deposit);
+                                return new ResponseEntity(account, HttpStatus.CREATED);
+                            } else {
+                                return new ResponseEntity("Hubo un problema en los datos proporcionados", HttpStatus.BAD_REQUEST);
                             }
+                        } else {
+                            return new ResponseEntity("Hubo un problema con el dni del cliente", HttpStatus.BAD_REQUEST);
                         }
-                    } catch (Exception e) {
-                        return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
                     }
+                } catch (Exception e) {
+                    return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
                 }
-            } catch (Exception e) {
-                return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
             }
-        } catch (Exception e) {
-            return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.NOT_FOUND);
-        }
-        return new ResponseEntity<Account>(account, HttpStatus.CREATED);
+       return new ResponseEntity("NO EXISTE NINGUNA CUENTA CON ESE ID",HttpStatus.BAD_REQUEST);
 
     }
 
