@@ -8,20 +8,20 @@ public class Transfer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name="id_transfer")
+    @Column(name = "id_transfer")
     private int idTransfer;
 
     @OneToOne(cascade = CascadeType.DETACH)
-    @JoinColumn(name= "id_customer",referencedColumnName = "customer_id")
+    @JoinColumn(name = "id_customer", referencedColumnName = "customer_id")
     private Customer idCustomer;
 
     @OneToOne(cascade = CascadeType.DETACH)
-    @JoinColumn(name= "id_account",referencedColumnName = "id_account")
+    @JoinColumn(name = "id_account", referencedColumnName = "id_account")
     private Account idAccount;
 
     private Double amount;
 
-    @Column(name="date_transfer")
+    @Column(name = "date_transfer")
     private Date dateTransfer;
 
     public int getIdTransfer() {

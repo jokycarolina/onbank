@@ -42,6 +42,9 @@ public class MainController {
     @Autowired
     private IPaymentRepository paymentRepository;
 
+    @Autowired
+    private ITransferRepository transferRepository;
+
     // ***************************************GET*******************************************************************
     //Traer todos los clientes
     @GetMapping(path = "/customers")
@@ -81,8 +84,14 @@ public class MainController {
 
     //Traer todas las ordenes de extraccion
     @GetMapping(path = "/extractionorders")
-    Iterable<ExtractionOrder> getAllextractionOrders() {
+    Iterable<ExtractionOrder> getAllExtractionOrders() {
         return extractionOrderRepository.findAll();
+    }
+
+    //Traer todas las transferencias
+    @GetMapping(path = "/transfer")
+    Iterable<Transfer> getAllTransfers() {
+        return transferRepository.findAll();
     }
 
     //Traer customer por id
@@ -165,6 +174,7 @@ public class MainController {
         }
     }
 
+
     //////////////*********************** POST****************************** /////
     //Creamos un cliente nuevo con una cuenta de ahorro en pesos con saldo 0.00 por default y devolvemos el cliente creado
     @PostMapping(path = "/", consumes = "application/json", produces = "application/json")
@@ -180,7 +190,7 @@ public class MainController {
             List<Account> accounts = new ArrayList<>();
             accounts.add(newAccount);
             customer.setAccounts(accounts);
-            Customer newCustomer = customerRepository.save(customer);
+            Customer newCustomer = customerRepository.save(customer);//Guardamos el cliente
             return new ResponseEntity<>(newCustomer, HttpStatus.CREATED);
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -191,8 +201,19 @@ public class MainController {
     @PostMapping(path = "/newphonenumber", consumes = "application/json", produces = "application/json")
     //Guardamos nuevo telefono
     ResponseEntity<PhoneNumber> newPhoneNumber(@RequestBody PhoneNumber phoneNumber) {
-        phoneNumberRepository.save(phoneNumber);
-        return new ResponseEntity<>(phoneNumber, HttpStatus.CREATED);
+        try {
+            Customer customer = customerRepository.findById(phoneNumber.getCostumer().getCustomerId()).get();
+            if (customer != null) {
+                phoneNumber.setCostumer(customer);
+                phoneNumberRepository.save(phoneNumber);
+                return new ResponseEntity("Guardado con exito " + phoneNumber, HttpStatus.CREATED);
+            } else {
+                return new ResponseEntity("no existe un cliente con el id " +
+                        customer.getCustomerId(), HttpStatus.BAD_REQUEST);
+            }
+        } catch (Exception e) {
+            return new ResponseEntity(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 
     // Creamos una nueva orden de extraccion
@@ -203,7 +224,6 @@ public class MainController {
         try {
             Customer customer = customerRepository.findById(id).get();
             List<Account> accountList = customer.getAccounts(); //buscamos todas las cuentas del cliente
-
             for (Account account : accountList) {
                 if (account.getIdAccount() == idAccount) { //el numero de cuenta ingresado corresponde a una cuenta del cliente?
                     if (account.getCurrency().getIdCurrency() == idCurrency) { //el tipo de moneda es igual al de la cuenta?
@@ -226,8 +246,9 @@ public class MainController {
                 return new ResponseEntity("El numero de cuenta no corresponde al cliente",
                         HttpStatus.BAD_REQUEST);
             }
+
         } catch (Exception e) {
-            return new ResponseEntity("Hubo un problema de:" + e.getMessage().toString(), HttpStatus.NOT_FOUND);
+            return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.NOT_FOUND);
         }
         return new ResponseEntity("Intente de nuevo", HttpStatus.BAD_REQUEST);
     }
@@ -251,14 +272,14 @@ public class MainController {
                             }
                         }
                     } catch (Exception e) {
-                        return new ResponseEntity("Hubo un problema de:" + e.getMessage().toString(), HttpStatus.BAD_REQUEST);
+                        return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
                     }
                 }
             } catch (Exception e) {
-                return new ResponseEntity("Hubo un problema de:" + e.getMessage().toString(), HttpStatus.BAD_REQUEST);
+                return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.BAD_REQUEST);
             }
         } catch (Exception e) {
-            return new ResponseEntity("Hubo un problema de:" + e.getMessage().toString(), HttpStatus.NOT_FOUND);
+            return new ResponseEntity("Hubo un problema de:" + e.getMessage(), HttpStatus.NOT_FOUND);
         }
         return new ResponseEntity<Account>(account, HttpStatus.CREATED);
 
@@ -267,12 +288,12 @@ public class MainController {
     //Creamos un pago devolvemos la cuenta con el nuevo monto
     @PostMapping(path = "/payment", consumes = "application/json", produces = "application/json")
     ResponseEntity createPayment(@RequestBody Payment payment) {
-       try {
-           //El pago puede tener varios clientes buscamos,iteramos la lista de clientes,por cada cliente del pago:
+        try {
+            //El pago puede tener varios clientes buscamos,iteramos la lista de clientes,por cada cliente del pago:
             for (Customer customer : payment.getCustomerList()) {
                 //validamos que el cliente exista en el repositorio
                 Integer idCustomer = customer.getCustomerId();
-                Customer cFound =customerRepository.findById(idCustomer).get();
+                Customer cFound = customerRepository.findById(idCustomer).get();
                 if (cFound != null) {
                     //cada cliente puede tener varias cuentas,las iteramos
                     for (Account acc : cFound.getAccounts()) {
@@ -283,58 +304,165 @@ public class MainController {
                             acc.setAmount(acc.getAmount().doubleValue() - payment.getAmount().doubleValue()); //seteamos el monto de la cuenta
                             paymentRepository.save(payment);// guardamos
                             return new ResponseEntity("Se debito correctamente el monto de:"
-                                    +payment.getAmount(),HttpStatus.CREATED);
+                                    + payment.getAmount(), HttpStatus.CREATED);
                         } else {
-                            return new ResponseEntity("Ups algo salio mal",HttpStatus.BAD_REQUEST);
+                            return new ResponseEntity("Ups algo salio mal", HttpStatus.BAD_REQUEST);
                         }
                     }
                 } else {
                     return new ResponseEntity("EL CLIENTE NO CONTIENE UNA CUENTA", HttpStatus.BAD_REQUEST);
                 }
             }
-       } catch (Exception e) {
+        } catch (Exception e) {
             return new ResponseEntity("ERROR DEL TIPO" + e.getMessage(), HttpStatus.BAD_REQUEST);
         }
         return new ResponseEntity("Intente de nuevo", HttpStatus.BAD_REQUEST);
     }
-        ////////////////////////DELETE ////////////////
-        // eliminamos un pago devolvemos el id del pago eliminado
-    @DeleteMapping(path="payment/{id}")
-    @ResponseBody
-    ResponseEntity<GeneralResponse> deleteById(@PathVariable("id") int id){
+
+    @PostMapping(path = "/transfer",
+            consumes = "application/json", produces = "application/json")
+    ResponseEntity<GeneralResponse> createTransfer(@RequestBody Transfer transfer) {
         GeneralResponse generalResponse = new GeneralResponse();
-        try{
-            paymentRepository.deleteById(id);
-            generalResponse.setCode(HttpStatus.OK.value());
-            generalResponse.setMessage(HttpStatus.OK.getReasonPhrase() + "Pago eliminado con el id: " +id);
+        try {
+            //buscamos en el repo el cliente con el dni de la transferencia
+            Customer customer = customerRepository.getCustomerByDni(transfer.getIdCustomer().getCostumerDni());
+            //buscamos la cuenta en el repo a traves del id de la cuenta dada en la transferencia
+            Account account = accountRepository.findById(transfer.getIdAccount().getIdAccount()).get();
+            if (customer != null && account != null) {
+                for (Account accCustomer : customer.getAccounts()) {
+                    //Validamos que el tipo de moneda de la cuenta del cliente a debitar sea el mismo a la cuenta a recibir
+                    if (accCustomer.getCurrency().getIdCurrency() == account.getCurrency().getIdCurrency()) {
+                        //Validamos que el monto disponible sea igual o mayor a la transferencia
+                        if (accCustomer.getAmount() >= transfer.getAmount()) {
+                            //restamos el monto en la cuenta a debitar
+                            accCustomer.setAmount(accCustomer.getAmount() - transfer.getAmount());
+                            //seteamos el monto de la cuenta a recibir
+                            account.setAmount(account.getAmount() + transfer.getAmount());
+                            transferRepository.save(transfer);
+                        } else {
+                            generalResponse.setCode(HttpStatus.BAD_REQUEST.value());
+                            generalResponse.setMessage("EL MONTO DE LA TRANSFERENCIA ES MAYOR A LA DISPONIBLE");
+                            return ResponseEntity.badRequest().body(generalResponse);
+                        }
+                    } else {
+                        generalResponse.setCode(HttpStatus.BAD_REQUEST.value());
+                        generalResponse.setMessage("EL TIPO DE MONEDA NO COINCIDE");
+                        return ResponseEntity.badRequest().body(generalResponse);
+                    }
+                }
+            } else {
+                generalResponse.setCode(HttpStatus.BAD_REQUEST.value());
+                generalResponse.setMessage("ERROR,REVISAR EL DNI DEL CLIENTE Y/O EL ID DE LA CUENTA");
+                return ResponseEntity.badRequest().body(generalResponse);
+            }
+        } catch (Exception e) {
+            return new ResponseEntity("ERROR DEL TIPO" + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+        generalResponse.setCode(HttpStatus.ACCEPTED.value());
+        generalResponse.setMessage("TRANSFERENCIA HECHA CON EXITO! con el id: " + transfer.getIdTransfer());
+        return ResponseEntity.accepted().body(generalResponse);
+    }
+
+
+    ////////////////////////DELETE ////////////////
+    // eliminamos un pago devolvemos el id del pago eliminado y hacemos el reintegro del importe del pago
+    @DeleteMapping(path = "/payment/{id}")
+    @ResponseBody
+    ResponseEntity<GeneralResponse> deleteById(@PathVariable("id") int id) {
+        GeneralResponse generalResponse = new GeneralResponse();
+        try {
+            Payment payment = paymentRepository.findById(id).get();
+            for (Customer customer : payment.getCustomerList()) { //Buscamos los clientes que hicieron el pago
+                for (Account acc : customer.getAccounts()) {// de esos clientes buscamos sus cuentas
+                    //si la moneda del pago es igual a la moneda de la cuenta eliminamos
+                    if (acc.getCurrency().getIdCurrency() == payment.getCurrency().getIdCurrency()) {
+                        acc.setAmount(acc.getAmount() + payment.getAmount()); //Seteamos el monto de la cuenta
+                        paymentRepository.deleteById(id); //eliminamos el pago
+                    } else {
+                        generalResponse.setCode(HttpStatus.BAD_REQUEST.value());
+                        generalResponse.setMessage("error al eliminar");
+                        return ResponseEntity.badRequest().body(generalResponse);
+                    }
+                }
+            }
+            generalResponse.setCode(HttpStatus.ACCEPTED.value());
+            generalResponse.setMessage(HttpStatus.ACCEPTED.getReasonPhrase() + "Pago eliminado con el id: " + id);
             return ResponseEntity.accepted().body(generalResponse);
-        }catch(Exception e){
+        } catch (Exception e) {
             generalResponse.setCode(HttpStatus.CONFLICT.value());
-            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " "+e.getMessage());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " " + e.getMessage());
             return ResponseEntity.badRequest().body(generalResponse);
         }
-        
+
     }
+
     //Eliminamos un cliente devolvemos un generalResponse con el id
-    @DeleteMapping(path="customer/{id}")
+    @DeleteMapping(path = "/customer/{id}")
     @ResponseBody
-    ResponseEntity<GeneralResponse> deleteCustomerById(@PathVariable("id") int id){
+    ResponseEntity<GeneralResponse> deleteCustomerById(@PathVariable("id") int id) {
         GeneralResponse generalResponse = new GeneralResponse();
-        try{
+        try {
             customerRepository.deleteById(id);
-            generalResponse.setCode(HttpStatus.OK.value());
-            generalResponse.setMessage(HttpStatus.OK.getReasonPhrase() + "cliente eliminado con el id: " +id);
+            generalResponse.setCode(HttpStatus.ACCEPTED.value());
+            generalResponse.setMessage(HttpStatus.ACCEPTED.getReasonPhrase() + " cliente eliminado con el id: " + id);
             return ResponseEntity.accepted().body(generalResponse);
-        }catch(Exception e){
+        } catch (Exception e) {
             generalResponse.setCode(HttpStatus.CONFLICT.value());
-            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " "+e.getMessage());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " " + e.getMessage());
             return ResponseEntity.badRequest().body(generalResponse);
         }
 
     }
 
+    /////////////////////////////////////////UPDATE /////////////////////////////////////
+    //Actualiza el dni del cliente buscado por id devolvemos el id del cliente actualizado
+    @PutMapping(path = "/customer/{id}/update/dni/{dni}")
+    @ResponseBody
+    ResponseEntity<GeneralResponse> updateCustomerById(@PathVariable("id") int id,
+                                                       @PathVariable("dni") String dni) {
+        GeneralResponse generalResponse = new GeneralResponse();
+        try {
+            Customer customer = customerRepository.findById(id).get();
+            customer.setCostumerDni(dni);
+            customerRepository.save(customer);
+            generalResponse.setCode(HttpStatus.ACCEPTED.value());
+            generalResponse.setMessage(HttpStatus.ACCEPTED.getReasonPhrase() + " DNI del cliente actualizado  con el id: "
+                    + id);
+            return ResponseEntity.accepted().body(generalResponse);
+        } catch (Exception e) {
+            generalResponse.setCode(HttpStatus.CONFLICT.value());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " " + e.getMessage());
+            return ResponseEntity.badRequest().body(generalResponse);
+        }
+    }
 
+    //Actualizamos a traves del id el password devolvemos el id del cliente actualizado
+    @PutMapping(path = "/customer/{id}/update/password/{password}")
+    @ResponseBody
+    ResponseEntity<GeneralResponse> updatePasswordById(@PathVariable("id") int id,
+                                                       @PathVariable("password") int password) {
+        GeneralResponse generalResponse = new GeneralResponse();
+        try {
+            Customer customer = customerRepository.findById(id).get();
+            customer.setPassword(password);
+            customerRepository.save(customer);
+            generalResponse.setCode(HttpStatus.ACCEPTED.value());
+            generalResponse.setMessage(HttpStatus.ACCEPTED.getReasonPhrase() + " password del cliente actualizado con el id: "
+                    + id);
+            return ResponseEntity.accepted().body(generalResponse);
+        } catch (Exception e) {
+            generalResponse.setCode(HttpStatus.CONFLICT.value());
+            generalResponse.setMessage(HttpStatus.CONFLICT.getReasonPhrase() + " " + e.getMessage());
+            return ResponseEntity.badRequest().body(generalResponse);
+        }
+    }
 }
+
+
+
+
+
+
 
 
 

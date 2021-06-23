@@ -33,7 +33,7 @@ public class Customer {
 
     @JsonBackReference
     @ManyToMany(mappedBy = "customerList")
-     private List<Payment> payments;
+    private List<Payment> payments;
 
     public int getCustomerId() {
         return customerId;
